@@ -16,15 +16,16 @@
     <p>{{#if flash_type}}{{flash_type}}: {{/if}}{{ flash }}</p>
     {{/if}}
 
-    <form action="/login" method="post" accept-charset="utf-8">
+    <a href="/login">back to login</a>
+
+    <form action="/register" method="post" accept-charset="utf-8">
         <label for="username">username</label>
         <input type="text" name="username" id="username" value="" />
         <label for="password">password</label>
         <input type="password" name="password" id="password" value="" />
-        <p><input type="submit" value="login"></p>
+        <p><input type="submit" value="register"></p>
     </form>
 
-    <a href="/register">register</a>
 </body>
 
 </html>
