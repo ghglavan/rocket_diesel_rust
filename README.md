@@ -1,9 +1,9 @@
 # rocket_diesel_rust
 
 to get postgres-db address
-'''
+```
 docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' postgres
-'''
+```
 
 Create database env:
 ```
