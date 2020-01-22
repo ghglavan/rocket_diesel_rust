@@ -10,14 +10,160 @@
 <body>
     <h1>Rocket Session Example</h1>
     <p>Logged in with user ID {{ user_id }}.</p>
+    <input type="text" id="user_search" placeholder="Search.." />
+    <input type="submit" onclick="doSearch()" name="search" id="search" value="search" />
+
+    <div id="search_result"> </div>
     <form action="/logout" method="post" accept-charset="utf-8">
         <input type="submit" name="logout" id="logout" value="logout" />
     </form>
+    <div id="load_status"></div>
     <div id="posts"></div>
+
+    <div id="followed_users"></div>
 </body>
 
 
 <script>
+    function fetchJSONFile(path, callback, method = 'GET') {
+        var httpRequest = new XMLHttpRequest();
+        httpRequest.onreadystatechange = function () {
+            if (httpRequest.readyState === 4) {
+                if (httpRequest.status === 200) {
+                    var data = JSON.parse(httpRequest.responseText);
+                    if (callback) callback(data);
+                }
+            }
+        };
+        httpRequest.open(method, path);
+        httpRequest.send();
+    }
+
+
+    function insertStatus(data) {
+        document.getElementById('load_status').innerHTML = '<p>' + data + '</p>';
+    }
+
+    function insertIntoPosts(data) {
+        posts_div = document.getElementById('posts');
+        for (e in data) {
+            var p1 = document.createElement('p');
+            var a1 = document.createElement('a');
+            a1.href = '/post/' + data[e].id;
+            a1.innerHTML = data[e].author + ':' + data[e].title;
+            p1.appendChild(a1);
+            p1.innerHTML += ' at ' + data[e].date;
+            posts_div.appendChild(p1);
+        }
+        insertStatus('Posts loaded');
+    }
+
+    function insertSearchResultSuccess(data) {
+        var f_p = document.createElement('p');
+        f_p.innerHTML = data;
+        var f_button = document.createElement('button');
+        f_button.type = 'button';
+        f_button.addEventListener('click', function () {
+            followUser(data);
+        });
+        f_button.innerHTML = 'Follow';
+        f_p.appendChild(f_button);
+        document.getElementById("search_result").appendChild(f_p);
+    }
+
+    function insertSearchResult(data) {
+        var f_p = document.createElement('p');
+        f_p.innerHTML = data;
+        document.getElementById("search_result").appendChild(f_p);
+    }
+
+    function insertIntoFollowedUser(user) {
+        var f_data = document.getElementById("followed_users");
+        var f_p = document.createElement('p');
+        f_p.innerHTML = user;
+        f_p.id = 'f_' + user;
+        var f_button = document.createElement('button');
+        f_button.type = 'button';
+        f_button.addEventListener('click', function () {
+            unFollowUser(user);
+        });
+        f_button.innerHTML = 'Unfollow';
+        f_p.appendChild(f_button);
+        f_data.appendChild(f_p);
+    }
+
+    function insertIntoFollowedUsers(data) {
+        for (e in data) {
+            insertIntoFollowedUser(data[e]);
+        }
+    }
+
+    function followUser(username) {
+        fetchJSONFile('follow/' + username, function (data) {
+            if ('status' in data) {
+                if (data['status'] === 'ok') {
+                    insertIntoFollowedUser(username);
+                }
+            }
+        })
+
+    }
+
+    function unFollowUser(username) {
+
+        fetchJSONFile('unfollow/' + username, function (data) {
+            if ('status' in data) {
+                if (data['status'] === 'ok') {
+                    document.getElementById('f_' + username).remove();
+                }
+            }
+        })
+
+    }
+
+    document.addEventListener("DOMContentLoaded", function (event) {
+
+        fetchJSONFile('posts', function (data) {
+            if ('status' in data && 'value' in data) {
+                if (data['status'] === 'ok') {
+                    insertIntoPosts(data['value']);
+                } else {
+                    insertStatus("Error loading posts" + data['value']);
+                }
+            } else {
+                insertStatus('No status in response');
+            }
+            console.log(data);
+        });
+
+        fetchJSONFile('followed_users', function (data) {
+            if ('status' in data && 'value' in data) {
+                if (data['status'] === 'ok') {
+                    insertIntoFollowedUsers(data['value']);
+                } else {
+                    insertStatus("Error loading followers" + data['value']);
+                }
+            } else {
+                insertStatus('No status in response');
+            }
+            console.log(data);
+        });
+    });
+
+    function doSearch() {
+        var username = document.getElementById("user_search").value;
+        fetchJSONFile("user/" + username, function (data) {
+            if ('status' in data && 'value' in data) {
+                if (data['status'] === 'ok') {
+                    insertSearchResultSuccess(data['value']);
+                } else {
+                    insertSearchResult(data['value']);
+                }
+            } else {
+                insertSearchResult('No status in response');
+            }
+        });
+    };
 </script>
 
 </html>
