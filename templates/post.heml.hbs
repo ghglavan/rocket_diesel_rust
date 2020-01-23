@@ -15,16 +15,146 @@
 
     {{#if author}}
     <p>
-        {{author}} : {{#if title}}{{title}}{{/if}} at {{#if date}}{{date}}{{/if}}
+        <p id="post_id">{{id}}</p> {{author}} : {{#if title}}{{title}}{{/if}} at {{#if date}}{{date}}{{/if}}
     </p>
 
     <p>
         {{#if body}}{{body}}{{/if}}
     </p>
+    </br>
+    <div>
+        <p id="n_upvotes"></p><button id="upvote_button" onclick="upvote()" disabled>upvote</button>
+        <p id="n_downvotes"></p><button id="downvote_button" onclick="downvote()" disabled>downvote</button>
+        <p id="rating status"></p>
+    </div>
+    </br>
+    <ul id="comments">
+
+    </ul>
+
     {{/if}}
 
 
     <a href="/">back</a>
 </body>
+
+<script>
+
+    function fetchJSONFile(path, callback, method = 'GET') {
+        var httpRequest = new XMLHttpRequest();
+        httpRequest.onreadystatechange = function () {
+            if (httpRequest.readyState === 4) {
+                if (httpRequest.status === 200) {
+                    var data = JSON.parse(httpRequest.responseText);
+                    if (callback) callback(data);
+                }
+            }
+        };
+        httpRequest.open(method, path);
+        httpRequest.send();
+    }
+
+    function insertIntoComments(data) {
+        for (e in data) {
+            let comms = document.getElementById("comments");
+            let litem = document.createElement("li");
+            let ldiv = document.createElement("div");
+
+            let p1 = document.createElement("p");
+            p1.innerHTML = data[e]["author"] + " at " + data[e]["date"] + ":";
+            let p2 = document.createElement("p");
+            p2.innerHTML = data[e]["comment"];
+
+            ldiv.appendChild(p1);
+            ldiv.appendChild(p2);
+            litem.appendChild(ldiv);
+            comms.appendChild(litem);
+        }
+    }
+
+    function insertRating(data) {
+        console.log(data);
+        if (data["user_upvoted"] === false) {
+            document.getElementById("upvote_button").disabled = false;
+        }
+
+        if (data["user_downvoted"] === false) {
+            document.getElementById("downvote_button").disabled = false;
+        }
+
+        document.getElementById("n_upvotes").innerHTML = data["n_upvotes"];
+        document.getElementById("n_downvotes").innerHTML = data["n_downvotes"];
+
+    }
+
+    function upvote() {
+        let id = document.getElementById("post_id");
+
+        if (id === undefined)
+            return;
+
+        if (document.getElementById("downvote_button").disabled === true) {
+            var old_val = parseInt(document.getElementById("n_downvotes").innerHTML);
+
+            document.getElementById("n_downvotes").innerHTML = old_val - 1;
+        }
+
+        document.getElementById("downvote_button").disabled = true;
+        document.getElementById("upvote_button").disabled = true;
+
+        fetchJSONFile("/upvote/" + id.innerHTML, function (data) {
+            document.getElementById("downvote_button").disabled = false;
+            var old_val = parseInt(document.getElementById("n_upvotes").innerHTML);
+            document.getElementById("n_upvotes").innerHTML = old_val + 1;
+        });
+    }
+
+    function downvote() {
+        let id = document.getElementById("post_id");
+
+        if (id === undefined)
+            return;
+
+        if (document.getElementById("upvote_button").disabled === true) {
+            var old_val = parseInt(document.getElementById("n_upvotes").innerHTML);
+            document.getElementById("n_upvotes").innerHTML = old_val - 1;
+        }
+
+        document.getElementById("downvote_button").disabled = true;
+        document.getElementById("upvote_button").disabled = true;
+
+        fetchJSONFile("/downvote/" + id.innerHTML, function (data) {
+            document.getElementById("upvote_button").disabled = false;
+            var old_val = parseInt(document.getElementById("n_downvotes").innerHTML);
+            document.getElementById("n_downvotes").innerHTML = old_val + 1;
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", function (event) {
+        let id = document.getElementById("post_id");
+
+        if (id === undefined)
+            return;
+
+        fetchJSONFile("/comments/" + id.innerHTML, function (data) {
+            console.log(data);
+            if ("status" in data) {
+                if (data["status"] === "ok") {
+                    insertIntoComments(data['value'])
+                }
+            }
+        });
+
+        fetchJSONFile("/rating/" + id.innerHTML, function (data) {
+            console.log(data);
+            if ("status" in data) {
+                if (data["status"] === "ok") {
+                    insertRating(data['value'])
+                }
+            }
+        });
+    });
+
+</script>
 
 </html>

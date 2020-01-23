@@ -21,6 +21,12 @@
     <div id="posts"></div>
 
     <div id="followed_users"></div>
+
+    <form action="/add_post" method="post" accept-charset="=utf8">
+        <input type="text" id="title" name="title" placeholder="Tile.." /><br />
+        <textarea rows="15" cols="80" name="body"></textarea> <br />
+        <input type="submit" value="Post" />
+    </form>
 </body>
 
 
@@ -39,7 +45,6 @@
         httpRequest.send();
     }
 
-
     function insertStatus(data) {
         document.getElementById('load_status').innerHTML = '<p>' + data + '</p>';
     }
@@ -52,7 +57,11 @@
             a1.href = '/post/' + data[e].id;
             a1.innerHTML = data[e].author + ':' + data[e].title;
             p1.appendChild(a1);
-            p1.innerHTML += ' at ' + data[e].date;
+            let date = new Date(data[e].date * 1000);
+            p1.innerHTML += ' at ' + date.toUTCString();
+            for (tag in data[e].tags) {
+                p1.innerHTML += " " + data[e].tags[tag] + " ";
+            }
             posts_div.appendChild(p1);
         }
         insertStatus('Posts loaded');

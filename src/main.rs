@@ -39,6 +39,17 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 
+extern crate chrono;
+use chrono::prelude::DateTime;
+use chrono::Utc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+#[derive(FromForm, Clone, Debug)]
+struct Post {
+    title: String,
+    body: String,
+}
+
 #[derive(FromForm, Clone, Debug)]
 struct Login {
     username: String,
@@ -66,6 +77,21 @@ impl<'a, 'r> FromRequest<'a, 'r> for User {
             .and_then(|cookie| serde_json::from_str(cookie.value()).ok())
             .or_forward(())
     }
+}
+
+#[post("/add_post", data = "<post_form>")]
+fn add_post(conn: RdrDbConn, post_form: Form<Post>, user: User) -> Redirect {
+    let date = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    let rows = &conn.execute(
+        "INSERT INTO rdr_posts (author, title, date, body) VALUES ($1, $2, $3, $4)",
+        &[&user.username, &post_form.title, &date, &post_form.body],
+    );
+
+    Redirect::to(uri!(index))
 }
 
 #[post("/login", data = "<login_form>")]
@@ -280,18 +306,32 @@ fn posts(conn: RdrDbConn, user: User) -> JsonValue {
     let mut posts: Vec<JsonValue> = Vec::new();
 
     let rows = &conn.query(
-        "SELECT id, author, title, date FROM rdr_posts WHERE author in (SELECT flw.followed FROM (SELECT followed, follower FROM rdr_follows WHERE follower = $1) AS flw)",
-        &[&user.username],
+        "SELECT id, author, title, date FROM rdr_posts WHERE author = $2 or author in (SELECT flw.followed FROM (SELECT followed, follower FROM rdr_follows WHERE follower = $1) AS flw) ORDER BY date DESC",
+        &[&user.username, &user.username],
     );
 
     match rows {
         Ok(n) => {
             for row in n {
+                let id = row.get::<usize, i32>(0);
+
+                let mut tags: Vec<String> = Vec::new();
+
+                let tags_rows =
+                    &conn.query("SELECT * FROM rdr_tags_in_posts WHERE post_id = $1", &[&id]);
+
+                if let Ok(tags_r) = tags_rows {
+                    for tag_row in tags_r {
+                        tags.push(tag_row.get(2));
+                    }
+                }
+
                 posts.push(json!({
-                    "id": row.get::<usize, i32>(0),
+                    "id": id,
                     "author": row.get::<usize, String>(1),
                     "title": row.get::<usize, String>(2),
-                    "date": row.get::<usize, String>(3)
+                    "date": row.get::<usize, i64>(3),
+                    "tags": tags
                 }));
             }
 
@@ -315,6 +355,152 @@ fn posts_not_logged() -> Redirect {
     Redirect::to(uri!(login_page))
 }
 
+#[get("/upvote/<post_id>")]
+fn upvote(conn: RdrDbConn, user: User, post_id: i32) -> JsonValue {
+    &conn.execute(
+        "DELETE FROM rdr_rating WHERE author = $1 AND post_id = $2",
+        &[&user.username, &post_id],
+    );
+
+    &conn.execute(
+        "INSERT INTO rdr_rating (post_id, author, upvote, downvote) VALUES ($1, $2, $3, $4)",
+        &[&post_id, &user.username, &true, &false],
+    );
+
+    json!({"status": "ok", "value": ""})
+}
+
+#[get("/downvote/<post_id>")]
+fn downvote(conn: RdrDbConn, user: User, post_id: i32) -> JsonValue {
+    &conn.execute(
+        "DELETE FROM rdr_rating WHERE author = $1 AND post_id = $2",
+        &[&user.username, &post_id],
+    );
+
+    &conn.execute(
+        "INSERT INTO rdr_rating (post_id, author, upvote, downvote) VALUES ($1, $2, $3, $4)",
+        &[&post_id, &user.username, &false, &true],
+    );
+
+    json!({"status": "ok", "value": ""})
+}
+
+#[get("/rating/<post_id>")]
+fn rating(conn: RdrDbConn, user: User, post_id: i32) -> JsonValue {
+    let mut n_upvotes = 0_u32;
+    let mut n_downvotes = 0_u32;
+    let mut user_upvoted = false;
+    let mut user_downvoted = false;
+
+    let rows = &conn.query(
+        "SELECT * FROM rdr_rating WHERE post_id = $1 and upvote = 't'",
+        &[&post_id],
+    );
+
+    match rows {
+        Ok(n) => {
+            n_upvotes = n.len() as u32;
+        }
+        Err(e) => {
+            return json!({
+                "status": "error",
+                "value": format!("could not get the nr of upvotes: {}", e)
+            });
+        }
+    };
+
+    let rows = &conn.query(
+        "SELECT * FROM rdr_rating WHERE post_id = $1 and downvote = 't'",
+        &[&post_id],
+    );
+
+    match rows {
+        Ok(n) => {
+            n_downvotes = n.len() as u32;
+        }
+        Err(e) => {
+            return json!({
+                "status": "error",
+                "value": format!("could not get the nr of downvotes: {}", e)
+            });
+        }
+    };
+
+    let rows = &conn.query(
+        "SELECT * FROM rdr_rating WHERE author = $1 and post_id = $2",
+        &[&user.username, &post_id],
+    );
+    match rows {
+        Ok(n) => {
+            if n.len() > 1 {
+                return json!({
+                    "status": "error",
+                    "value": format!("internal error: {} has too many ratings {}", user.username, n.len())
+                });
+            }
+
+            if n.len() == 1 {
+                user_upvoted = n.get(0).get(3);
+                user_downvoted = n.get(0).get(4);
+            }
+
+            if user_upvoted && user_downvoted {
+                return json!({
+                    "status": "error",
+                    "value": format!("internal error: {} has both rating types", user.username)
+                });
+            }
+        }
+        Err(e) => {
+            return json!({
+                "status": "error",
+                "value": format!("could not get the nr of downvotes: {}", e)
+            });
+        }
+    };
+
+    json!({
+        "status": "ok",
+        "value": json!({
+        "n_upvotes": n_upvotes,
+        "n_downvotes": n_downvotes,
+        "user_upvoted": user_upvoted,
+        "user_downvoted": user_downvoted
+    })
+    })
+}
+
+#[get("/comments/<post_id>")]
+fn comments(conn: RdrDbConn, user: User, post_id: i32) -> JsonValue {
+    let mut comms: Vec<JsonValue> = Vec::new();
+    let rows = &conn.query("SELECT * FROM rdr_comments WHERE post_id = $1", &[&post_id]);
+
+    match rows {
+        Ok(n) => {
+            println!("row {:?}", n);
+            for row in n {
+                comms.push(json!({
+                    "author": row.get::<usize, String>(2),
+                    "date": row.get::<usize, i64>(3),
+                    "comment": row.get::<usize, String>(4)
+                }));
+            }
+
+            return json!({
+                "status": "ok",
+                "value": comms
+            });
+        }
+
+        Err(e) => {
+            return json!({
+                "status": "error",
+                "value": format!("{}", e)
+            });
+        }
+    }
+}
+
 #[get("/post/<post_id>")]
 fn post(conn: RdrDbConn, user: User, post_id: i32) -> Template {
     let rows = &conn.query("SELECT * FROM rdr_posts WHERE id = $1", &[&post_id]);
@@ -335,6 +521,7 @@ fn post(conn: RdrDbConn, user: User, post_id: i32) -> Template {
                 return Template::render("post", &context);
             }
 
+            let id: i32 = n.get(0).get(0);
             let author: String = n.get(0).get(1);
 
             let mut found = false;
@@ -348,14 +535,20 @@ fn post(conn: RdrDbConn, user: User, post_id: i32) -> Template {
                 }
             }
 
-            if (!found) {
+            if (!found && author != user.username) {
                 context.insert("error", "No access".to_string());
                 return Template::render("post", &context);
             }
 
+            context.insert("id", id.to_string());
             context.insert("author", author);
             context.insert("title", n.get(0).get(2));
-            context.insert("date", n.get(0).get(3));
+            let date = n.get(0).get::<usize, i64>(3) as u64;
+            let d = UNIX_EPOCH + Duration::from_secs(date);
+            let datetime = DateTime::<Utc>::from(d);
+            let timestamp_str = datetime.format("%Y-%m-%d %H:%M:%S").to_string();
+
+            context.insert("date", timestamp_str);
             context.insert("body", n.get(0).get(4));
             return Template::render("post", &context);
         }
@@ -478,7 +671,12 @@ fn rocket() -> rocket::Rocket {
                 follow_user,
                 follow_user_not_logged,
                 post,
-                post_not_logged
+                post_not_logged,
+                add_post,
+                comments,
+                rating,
+                upvote,
+                downvote
             ],
         )
 }

@@ -5,3 +5,7 @@ DROP SCHEMA audit CASCADE;
 DROP TABLE rdr_users CASCADE;
 DROP TABLE rdr_posts CASCADE;
 DROP TABLE rdr_follows CASCADE;
+DROP TABLE rdr_comments CASCADE;
+DROP TABLE rdr_rating CASCADE;
+DROP TABLE rdr_post_tags CASCADE;
+DROP TABLE rdr_tags_in_posts CASCADE;
