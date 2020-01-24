@@ -76,6 +76,11 @@ local   all             all                                     trust
 host    rdr             rdr_user        172.17.0.0/16           password
 host     all              all             0.0.0.0/0         reject
 ```
+if you need to use diesel migrate, you neet to add the following line at the top of the rules:
+```
+host    all             postgres        172.17.0.0/16           password   
+```
+
 copy it back in container and we are done. Now you can only connect using the previous user (some-postgres) using unix sockets (from inside docker). To do that, run a bash in our docker:
 
 ```
