@@ -182,3 +182,14 @@ FOR EACH ROW EXECUTE PROCEDURE audit.if_modified_func();
 CREATE TRIGGER follows_audit
 AFTER INSERT OR UPDATE OR DELETE ON rdr_follows
 FOR EACH ROW EXECUTE PROCEDURE audit.if_modified_func();
+
+CREATE USER rdr_user WITH PASSWORD 'rdr_password';
+GRANT SELECT,INSERT,UPDATE ON rdr_users TO rdr_user;
+GRANT SELECT,INSERT,UPDATE,DELETE ON rdr_follows TO rdr_user;
+GRANT SELECT,INSERT,UPDATE,DELETE ON rdr_rating TO rdr_user;
+GRANT SELECT,INSERT,UPDATE ON rdr_posts TO rdr_user;
+GRANT SELECT,INSERT,UPDATE ON rdr_comments TO rdr_user;
+GRANT SELECT,INSERT,UPDATE ON rdr_post_tags TO rdr_user;
+GRANT SELECT,INSERT,UPDATE ON rdr_tags_in_posts TO rdr_user;
+GRANT SELECT,INSERT,UPDATE ON rdr_groups TO rdr_user;
+GRANT SELECT,INSERT,UPDATE ON rdr_users_in_groups TO rdr_user;

@@ -11,3 +11,5 @@ DROP TABLE rdr_post_tags CASCADE;
 DROP TABLE rdr_tags_in_posts CASCADE;
 DROP TABLE rdr_groups CASCADE;
 DROP TABLE rdr_users_in_groups CASCADE;
+
+DROP USER rdr_user;

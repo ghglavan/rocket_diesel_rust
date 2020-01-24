@@ -20,4 +20,4 @@ log = "critical"
 limits = { forms = 32768 }
 
 [global.databases]
-rdr = { url = "postgres://postgres:fuckriot12@172.17.0.2/rdr" }
+rdr = { url = "postgres://rdr_user:rdr_password@172.17.0.2/rdr" }
