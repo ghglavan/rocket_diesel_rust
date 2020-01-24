@@ -79,6 +79,28 @@ INSERT INTO rdr_users (username, password) VALUES ('user2', '7e58d63b60197ceb55a
 INSERT INTO rdr_users (username, password) VALUES ('user3', '92877af70a45fd6a2ed7fe81e1236b78');
 INSERT INTO rdr_users (username, password) VALUES ('user4', '3f02ebe3d7929b091e3d8ccfde2f3bc6');
 
+CREATE TABLE rdr_groups (
+    groupname VARCHAR PRIMARY KEY NOT NULL
+);
+
+INSERT INTO rdr_groups (groupname) VALUES ('group1');
+INSERT INTO rdr_groups (groupname) VALUES ('group2');
+INSERT INTO rdr_groups (groupname) VALUES ('group3');
+INSERT INTO rdr_groups (groupname) VALUES ('group4');
+
+CREATE TABLE rdr_users_in_groups (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR REFERENCES rdr_users(username) NOT NULL,
+    groupname VARCHAR REFERENCES rdr_groups(groupname) NOT NULL
+);
+
+INSERT INTO rdr_users_in_groups (username, groupname) VALUES ('user1', 'group1');
+INSERT INTO rdr_users_in_groups (username, groupname) VALUES ('user2', 'group1');
+INSERT INTO rdr_users_in_groups (username, groupname) VALUES ('user3', 'group1');
+INSERT INTO rdr_users_in_groups (username, groupname) VALUES ('user1', 'group2');
+INSERT INTO rdr_users_in_groups (username, groupname) VALUES ('user3', 'group2');
+INSERT INTO rdr_users_in_groups (username, groupname) VALUES ('user4', 'group2');
+
 CREATE TABLE rdr_posts (
     id SERIAL PRIMARY KEY,
     author VARCHAR REFERENCES rdr_users(username) NOT NULL,
@@ -143,8 +165,10 @@ CREATE TABLE rdr_tags_in_posts (
 
 INSERT INTO rdr_tags_in_posts (post_id, tag_name) VALUES (1, 'tag1');
 INSERT INTO rdr_tags_in_posts (post_id, tag_name) VALUES (1, 'tag2');
-INSERT INTO rdr_tags_in_posts (post_id, tag_name) VALUES (1, 'tag3');
-INSERT INTO rdr_tags_in_posts (post_id, tag_name) VALUES (1, 'tag4');
+INSERT INTO rdr_tags_in_posts (post_id, tag_name) VALUES (2, 'tag3');
+INSERT INTO rdr_tags_in_posts (post_id, tag_name) VALUES (3, 'tag3');
+INSERT INTO rdr_tags_in_posts (post_id, tag_name) VALUES (4, 'tag3');
+INSERT INTO rdr_tags_in_posts (post_id, tag_name) VALUES (2, 'tag4');
 
 
 CREATE TRIGGER users_audit

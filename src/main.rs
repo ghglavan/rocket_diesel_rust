@@ -35,6 +35,8 @@ use serde::{Deserialize, Serialize};
 
 use rocket::State;
 
+use rocket::response::NamedFile;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -47,6 +49,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 #[derive(FromForm, Clone, Debug)]
 struct Post {
     title: String,
+    body: String,
+}
+
+#[derive(FromForm, Clone, Debug)]
+struct Comment {
     body: String,
 }
 
@@ -350,6 +357,128 @@ fn posts(conn: RdrDbConn, user: User) -> JsonValue {
     }
 }
 
+#[get("/posts_with_tag/<tag>")]
+fn posts_with_tag(conn: RdrDbConn, tag: String, user: User) -> JsonValue {
+    let mut posts: Vec<JsonValue> = Vec::new();
+
+    let rows = &conn.query(
+        "SELECT id, author, title, date FROM rdr_posts WHERE author = $2 or author in (SELECT flw.followed FROM (SELECT followed, follower FROM rdr_follows WHERE follower = $1) AS flw) ORDER BY date DESC",
+        &[&user.username, &user.username],
+    );
+
+    match rows {
+        Ok(n) => {
+            for row in n {
+                let id = row.get::<usize, i32>(0);
+
+                let mut tags: Vec<String> = Vec::new();
+
+                let tags_rows =
+                    &conn.query("SELECT * FROM rdr_tags_in_posts WHERE post_id = $1", &[&id]);
+
+                let mut found = false;
+                if let Ok(tags_r) = tags_rows {
+                    for tag_row in tags_r {
+                        let t: String = tag_row.get(2);
+                        if t == tag {
+                            found = true;
+                        }
+                        tags.push(t);
+                    }
+                }
+
+                if !found {
+                    continue;
+                }
+
+                posts.push(json!({
+                    "id": id,
+                    "author": row.get::<usize, String>(1),
+                    "title": row.get::<usize, String>(2),
+                    "date": row.get::<usize, i64>(3),
+                    "tags": tags
+                }));
+            }
+
+            return json!({
+                "status": "ok",
+                "value": posts
+            });
+        }
+
+        Err(e) => {
+            return json!({
+                "status": "error",
+                "value": format!("{}", e)
+            });
+        }
+    }
+}
+
+#[get("/posts_with_group/<group>")]
+fn posts_with_group(conn: RdrDbConn, group: String, user: User) -> JsonValue {
+    let mut posts: Vec<JsonValue> = Vec::new();
+
+    let rows = &conn.query(
+        "SELECT id, author, title, date FROM rdr_posts WHERE author = $2 
+        or author in (SELECT flw.followed FROM (SELECT followed, follower FROM rdr_follows WHERE follower = $1
+        and followed in (SELECT grp.username from (SELECT * from rdr_users_in_groups WHERE groupname = $3) as grp)
+        ) AS flw) 
+        ORDER BY date DESC",
+        &[&user.username, &user.username, &group],
+    );
+
+    match rows {
+        Ok(n) => {
+            for row in n {
+                let id = row.get::<usize, i32>(0);
+
+                let mut tags: Vec<String> = Vec::new();
+
+                let tags_rows =
+                    &conn.query("SELECT * FROM rdr_tags_in_posts WHERE post_id = $1", &[&id]);
+
+                if let Ok(tags_r) = tags_rows {
+                    for tag_row in tags_r {
+                        let t: String = tag_row.get(2);
+                        tags.push(t);
+                    }
+                }
+
+                posts.push(json!({
+                    "id": id,
+                    "author": row.get::<usize, String>(1),
+                    "title": row.get::<usize, String>(2),
+                    "date": row.get::<usize, i64>(3),
+                    "tags": tags
+                }));
+            }
+
+            return json!({
+                "status": "ok",
+                "value": posts
+            });
+        }
+
+        Err(e) => {
+            return json!({
+                "status": "error",
+                "value": format!("{}", e)
+            });
+        }
+    }
+}
+
+#[get("/script.js")]
+fn get_script() -> Result<NamedFile, std::io::Error> {
+    NamedFile::open(std::path::Path::new("templates/script.js"))
+}
+
+#[get("/style.css")]
+fn get_css() -> Result<NamedFile, std::io::Error> {
+    NamedFile::open(std::path::Path::new("templates/style.css"))
+}
+
 #[get("/posts", rank = 2)]
 fn posts_not_logged() -> Redirect {
     Redirect::to(uri!(login_page))
@@ -470,6 +599,72 @@ fn rating(conn: RdrDbConn, user: User, post_id: i32) -> JsonValue {
     })
 }
 
+#[post("/add_comment/<post_id>", data = "<comment_form>")]
+fn add_comment(
+    conn: RdrDbConn,
+    user: User,
+    post_id: i32,
+    comment_form: Form<Comment>,
+) -> JsonValue {
+    let author = user.username.clone();
+    let date = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    let rows = &conn.query(
+        "INSERT INTO rdr_comments (post_id, author, date, body) VALUES ($1, $2, $3, $4)",
+        &[&post_id, &author, &date, &comment_form.body],
+    );
+
+    match rows {
+        Ok(_) => {
+            return json!({
+                "status": "ok",
+                "value": json!({
+                    "author" :author,
+                    "date": date
+                })
+            });
+        }
+        Err(r) => {
+            return json!({
+                "status": "error",
+                "value": format!("internal error: {}", r)
+            });
+        }
+    };
+}
+
+#[get("/groups")]
+fn get_groups(conn: RdrDbConn, user: User) -> JsonValue {
+    let rows = &conn.query(
+        "SELECT * FROM rdr_users_in_groups WHERE username = $1",
+        &[&user.username],
+    );
+
+    let mut groups: Vec<String> = Vec::new();
+
+    match rows {
+        Ok(n) => {
+            for row in n {
+                groups.push(row.get(2));
+            }
+
+            return json!({
+                "status": "ok",
+                "value": groups
+            });
+        }
+        Err(e) => {
+            return json!({
+                "status": "error",
+                "value": format!("Internal error: {}", e)
+            });
+        }
+    }
+}
+
 #[get("/comments/<post_id>")]
 fn comments(conn: RdrDbConn, user: User, post_id: i32) -> JsonValue {
     let mut comms: Vec<JsonValue> = Vec::new();
@@ -477,7 +672,6 @@ fn comments(conn: RdrDbConn, user: User, post_id: i32) -> JsonValue {
 
     match rows {
         Ok(n) => {
-            println!("row {:?}", n);
             for row in n {
                 comms.push(json!({
                     "author": row.get::<usize, String>(2),
@@ -577,12 +771,12 @@ fn register(
     drop(login.password);
 
     let rows_updated = &conn.execute(
-        "INSERT INTO rdr_users (username, password) value ($1, $2)",
+        "INSERT INTO rdr_users (username, password) values ($1, $2)",
         &[&login.username, &password],
     );
 
     match rows_updated {
-        Ok(0) => {
+        Ok(1) => {
             return Ok(Flash::success(
                 Redirect::to(uri!(register_page)),
                 "Registration was successfull",
@@ -676,7 +870,13 @@ fn rocket() -> rocket::Rocket {
                 comments,
                 rating,
                 upvote,
-                downvote
+                downvote,
+                add_comment,
+                get_groups,
+                posts_with_tag,
+                posts_with_group,
+                get_script,
+                get_css
             ],
         )
 }

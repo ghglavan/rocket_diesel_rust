@@ -2,31 +2,49 @@
 <html>
 
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <title>Rocket: Session Example</title>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <link rel="canonical" href="https://html5-templates.com/" />
+    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    <script src="script.js"></script>
+    <link rel="stylesheet" type="text/css" href="style.css" />
+    <title>BLOG</title>
 </head>
 
 <body>
-    <h1>Rocket Session Example</h1>
-    <p>Logged in with user ID {{ user_id }}.</p>
-    <input type="text" id="user_search" placeholder="Search.." />
-    <input type="submit" onclick="doSearch()" name="search" id="search" value="search" />
+    <div id="desktop">
+        <p>Logged in with user ID {{ user_id }}.</p>
+        <form action="/logout" method="post" accept-charset="utf-8">
+            <input type="submit" name="logout" id="logout" value="logout" />
+        </form>
+        <div class="window" data-title="Followed" style="top:10%;left:5%;">
+            <input type="text" id="user_search" placeholder="Search.." />
+            <input type="submit" onclick="doSearch()" name="search" id="search" value="search" />
+            <div id="search_result"> </div>
+            <div id="followed_users"></div>
+            </br>
+            <ul id="goups" style="list-style-type: none">
+            </ul>
+        </div>
+        <div class="window" data-title="Posts" style="top:3%;left:60%;">
 
-    <div id="search_result"> </div>
-    <form action="/logout" method="post" accept-charset="utf-8">
-        <input type="submit" name="logout" id="logout" value="logout" />
-    </form>
-    <div id="load_status"></div>
-    <div id="posts"></div>
+            <div id="load_status"></div>
+            <div id="posts"></div>
 
-    <div id="followed_users"></div>
-
-    <form action="/add_post" method="post" accept-charset="=utf8">
-        <input type="text" id="title" name="title" placeholder="Tile.." /><br />
-        <textarea rows="15" cols="80" name="body"></textarea> <br />
-        <input type="submit" value="Post" />
-    </form>
+        </div>
+    </div>
+    <div class="window" data-title="Add Post" style="top:25%;left:25%;">
+        <form action="/add_post" method="post" accept-charset="=utf8">
+            <input type="text" id="title" name="title" placeholder="Tile.." /><br />
+            <textarea rows="15" cols="50" name="body"></textarea> <br />
+            <input type="submit" value="Post" />
+        </form>
+    </div>
+    <div id="taskbar">
+    </div>
 </body>
 
 
@@ -50,7 +68,10 @@
     }
 
     function insertIntoPosts(data) {
+        console.log("posts");
+        console.log(data);
         posts_div = document.getElementById('posts');
+        posts_div.innerHTML = "";
         for (e in data) {
             var p1 = document.createElement('p');
             var a1 = document.createElement('a');
@@ -58,9 +79,28 @@
             a1.innerHTML = data[e].author + ':' + data[e].title;
             p1.appendChild(a1);
             let date = new Date(data[e].date * 1000);
-            p1.innerHTML += ' at ' + date.toUTCString();
+            p1.innerHTML += ' at ' + date.toUTCString() + ' ';
+
             for (tag in data[e].tags) {
-                p1.innerHTML += " " + data[e].tags[tag] + " ";
+                var a = document.createElement('a');
+                let t = data[e].tags[tag];
+                a.onclick = function () {
+                    fetchJSONFile('posts_with_tag/' + t, function (data) {
+                        if ('status' in data && 'value' in data) {
+                            if (data['status'] === 'ok') {
+                                insertIntoPosts(data['value']);
+                            } else {
+                                insertStatus("Error loading posts" + data['value']);
+                            }
+                        } else {
+                            insertStatus('No status in response');
+                        }
+                        console.log(data);
+                    });
+                };
+                a.href = '#';
+                a.innerHTML = t;
+                p1.appendChild(a);
             }
             posts_div.appendChild(p1);
         }
@@ -130,6 +170,35 @@
 
     }
 
+    function insertGroups(data) {
+        let gr = document.getElementById('goups');
+        for (e in data) {
+            let li = document.createElement('li');
+
+
+            var a = document.createElement('a');
+            let g = data[e];
+            a.onclick = function () {
+                fetchJSONFile('posts_with_group/' + g, function (data) {
+                    if ('status' in data && 'value' in data) {
+                        if (data['status'] === 'ok') {
+                            insertIntoPosts(data['value']);
+                        } else {
+                            insertStatus("Error loading posts" + data['value']);
+                        }
+                    } else {
+                        insertStatus('No status in response');
+                    }
+                    console.log(data);
+                });
+            };
+            a.href = '#';
+            a.innerHTML = g;
+            li.appendChild(a);
+            gr.appendChild(li)
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", function (event) {
 
         fetchJSONFile('posts', function (data) {
@@ -156,6 +225,14 @@
                 insertStatus('No status in response');
             }
             console.log(data);
+        });
+
+        fetchJSONFile('groups', function (data) {
+            if ('status' in data && 'value' in data) {
+                if (data['status'] === 'ok') {
+                    insertGroups(data['value']);
+                }
+            }
         });
     });
 

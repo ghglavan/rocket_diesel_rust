@@ -9,3 +9,5 @@ DROP TABLE rdr_comments CASCADE;
 DROP TABLE rdr_rating CASCADE;
 DROP TABLE rdr_post_tags CASCADE;
 DROP TABLE rdr_tags_in_posts CASCADE;
+DROP TABLE rdr_groups CASCADE;
+DROP TABLE rdr_users_in_groups CASCADE;

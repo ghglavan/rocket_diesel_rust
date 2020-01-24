@@ -2,9 +2,16 @@
 <html>
 
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <title>Rocket: Sessions</title>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <link rel="canonical" href="https://html5-templates.com/" />
+    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    <script src="/script.js"></script>
+    <link rel="stylesheet" type="text/css" href="/style.css" />
+    <title>BLOG</title>
 </head>
 
 <body>
@@ -14,31 +21,75 @@
     {{/if}}
 
     {{#if author}}
-    <p>
-        <p id="post_id">{{id}}</p> {{author}} : {{#if title}}{{title}}{{/if}} at {{#if date}}{{date}}{{/if}}
-    </p>
+    <div id="desktop">
+        <div class="window" data-title="Posts" style="top:10%;left:7%;">
+            <p>
+                <p id="post_id">{{id}}</p> {{author}} : {{#if title}}{{title}}{{/if}} at {{#if date}}{{date}}{{/if}}
+            </p>
 
-    <p>
-        {{#if body}}{{body}}{{/if}}
-    </p>
-    </br>
-    <div>
-        <p id="n_upvotes"></p><button id="upvote_button" onclick="upvote()" disabled>upvote</button>
-        <p id="n_downvotes"></p><button id="downvote_button" onclick="downvote()" disabled>downvote</button>
-        <p id="rating status"></p>
+            <p>
+                {{#if body}}{{body}}{{/if}}
+            </p>
+            </br>
+            <div>
+                <p id="n_upvotes"></p><button id="upvote_button" onclick="upvote()" disabled>upvote</button>
+                <p id="n_downvotes"></p><button id="downvote_button" onclick="downvote()" disabled>downvote</button>
+                <p id="rating status"></p>
+            </div>
+        </div>
+
+        <div class="window" data-title="Comments" style="top:0;left:60%;">
+            <ul id="comments" style="list-style-type: none">
+            </ul>
+        </div>
+        <div class="window" data-title="Comment" style="top:25%;left:25%;">
+            <form accept-charset="=utf8">
+                <textarea id="comment_body" rows="15" cols="50" name="body"></textarea> <br />
+                <input id="comment_button" type="button" value="Post" />
+            </form>
+        </div>
+        <div id="taskbar">
+        </div>
+
+        <a href="/">back</a>
     </div>
-    </br>
-    <ul id="comments">
-
-    </ul>
-
     {{/if}}
 
 
-    <a href="/">back</a>
 </body>
 
 <script>
+
+    const btn = document.querySelector('button');
+
+    function sendData(data, link, callback) {
+
+        const XHR = new XMLHttpRequest();
+
+        let urlEncodedData = "",
+            urlEncodedDataPairs = [],
+            name;
+
+        for (name in data) {
+            urlEncodedDataPairs.push(encodeURIComponent(name) + '=' + encodeURIComponent(data[name]));
+        }
+
+        urlEncodedData = urlEncodedDataPairs.join('&').replace(/%20/g, '+');
+
+        console.log(urlEncodedData);
+
+        XHR.onreadystatechange = function () {
+            if (XHR.readyState === 4) {
+                if (XHR.status === 200) {
+                    var data = JSON.parse(XHR.responseText);
+                    if (callback) callback(data);
+                }
+            }
+        };
+        XHR.open('POST', link);
+        XHR.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        XHR.send(urlEncodedData);
+    }
 
     function fetchJSONFile(path, callback, method = 'GET') {
         var httpRequest = new XMLHttpRequest();
@@ -61,7 +112,8 @@
             let ldiv = document.createElement("div");
 
             let p1 = document.createElement("p");
-            p1.innerHTML = data[e]["author"] + " at " + data[e]["date"] + ":";
+            let date = new Date(data[e]["date"] * 1000);
+            p1.innerHTML = data[e]["author"] + " at " + date.toUTCString() + ":";
             let p2 = document.createElement("p");
             p2.innerHTML = data[e]["comment"];
 
@@ -131,10 +183,31 @@
     }
 
     document.addEventListener("DOMContentLoaded", function (event) {
+
         let id = document.getElementById("post_id");
 
         if (id === undefined)
             return;
+
+        var button = document.getElementById("comment_button");
+
+        button.addEventListener("click", function () {
+            var body = document.getElementById("comment_body").value;
+            var data = {
+                "body": body
+            };
+
+            sendData(data, "/add_comment/" + id.innerHTML, function (data) {
+                console.log(data);
+                if ("status" in data) {
+                    if (data["status"] === "ok") {
+                        data["value"].comment = body;
+                        insertIntoComments([data['value']]);
+                        document.getElementById("comment_body").value = "";
+                    }
+                }
+            });
+        });
 
         fetchJSONFile("/comments/" + id.innerHTML, function (data) {
             console.log(data);
